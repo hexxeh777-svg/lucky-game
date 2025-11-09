@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Счастливчик - Игра</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        .game-container {
+            max-width: 1000px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #444;
+            border-radius: 10px;
+            background-color: #2d2d2d;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .game-content {
+            flex: 1;
+            min-width: 600px;
+        }
+        .progress {
+            margin: 20px 0;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .question-box {
+            background-color: #3a3a3a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #4a90e2;
+        }
+        .answer-btn {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 6px;
+            background-color: #4a4a4a;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            text-align: left;
+            transition: background-color 0.3s;
+        }
+        .answer-btn:hover {
+            background-color: #5a5a5a;
+        }
+        .answer-btn.correct {
+            background-color: #27ae60;
+        }
+        .answer-btn.incorrect {
+            background-color: #e74c3c;
+        }
+        .lifeline-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .lifeline-btn.used {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 15px;
+            font-weight: bold;
+            height: 25px;
+        }
+        .winnings-table {
+            background-color: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            width: 200px;
+            margin-left: 20px;
+        }
+        .winnings-title {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 18px;
+            color: #4a90e2;
+        }
+        .winnings-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            text-align: left;
+        }
+        .winnings-list li {
+            padding: 8px;
+            margin: 3px 0;
+            border-radius: 4px;
+            background-color: #3a3a3a;
+        }
+        .winnings-list li.current {
+            background-color: #4a90e2;
+            font-weight: bold;
+        }
+        .winnings-list li.correct {
+            background-color: #27ae60;
+        }
+        .winnings-list li.secure {
+            background-color: #f39c12;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div class="game-content">
+        <h1>Счастливчик</h1>
+        <div class="progress">
+            <div>Вопрос: <span id="question-number">1</span> из <span id="total-questions">5</span></div>
+            <div>Выигрыш: <span id="current-winnings">0 руб.</span></div>
+        </div>
+        <div class="question-box">
+            <p id="question-text">Загрузка вопроса...</p>
+        </div>
+        <button class="answer-btn" data-option="A" onclick="selectAnswer(this)">A) </button>
+        <button class="answer-btn" data-option="B" onclick="selectAnswer(this)">B) </button>
+        <button class="answer-btn" data-option="C" onclick="selectAnswer(this)">C) </button>
+        <button class="answer-btn" data-option="D" onclick="selectAnswer(this)">D) </button>
+
+        <div style="margin-top: 20px;">
+            <button class="lifeline-btn" id="fifty-fifty" onclick="useFiftyFifty()">50/50</button>
+            <button class="lifeline-btn" id="call-friend" onclick="useCallFriend()">Звонок другу</button>
+            <button class="lifeline-btn" id="ask-audience" onclick="useAskAudience()">Спросить зрителей</button>
+        </div>
+
+        <div id="status"></div>
+        <button id="next-btn" onclick="nextQuestion()" style="display: none; margin-top: 20px; padding: 10px 20px;">Следующий вопрос</button>
+    </div>
+
+    <div class="winnings-table">
+        <div class="winnings-title">Выигрыши</div>
+        <ul class="winnings-list" id="winnings-list">
+        </ul>
+    </div>
+</div>
+
+<script src="questions.js"></script> <!-- Подключаем файл с вопросами -->
+<script>
+    // --- Настройки игры ---
+    // Количество вопросов в игре (берётся из перемешанного массива)
+    const TOTAL_QUESTIONS_IN_GAME = 15; // Можно изменить, если нужно меньше, чем есть в базе
+
+    // Таблица выигрышей (до 15 уровней)
+    const winnings = [
+        100, 200, 300, 500, 1000, // 1-5
+        2000, 4000, 8000, 16000, 32000, // 6-10
+        64000, 125000, 250000, 500000, 1000000 // 11-15
+    ];
+
+    // Гарантированные суммы (5-й и 10-й уровни)
+    const secureWinnings = [winnings[4], winnings[9]]; // Индексы: 4 и 9 -> 1000 и 32000
+
+    // --- Переменные игры ---
+    let questions = []; // Перемешанный массив вопросов
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let lifelines = {
+        fiftyFifty: true,
+        callFriend: true,
+        askAudience: true
+    };
+    let gameActive = true;
+
+    // --- Вспомогательные функции ---
+    function formatNumber(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    }
+
+    // Функция для перемешивания массива (алгоритм Фишера-Йетса)
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    // --- Инициализация игры ---
+    function initGame() {
+        if (!originalQuestions || originalQuestions.length === 0) {
+            document.getElementById("question-text").textContent = "Ошибка: База вопросов пуста.";
+            gameActive = false;
+            return;
+        }
+
+        // Создаём копию и перемешиваем
+        questions = shuffleArray([...originalQuestions]);
+
+        // Ограничиваем количество вопросов до нужного или до доступного в базе
+        questions = questions.slice(0, Math.min(TOTAL_QUESTIONS_IN_GAME, questions.length));
+        document.getElementById("total-questions").textContent = questions.length;
+
+        // Проверяем, достаточно ли вопросов
+        if (questions.length === 0) {
+            document.getElementById("question-text").textContent = "Недостаточно вопросов для игры.";
+            gameActive = false;
+            return;
+        }
+
+        // Запускаем первую загрузку вопроса
+        loadQuestion();
+    }
+
+    // --- Основная логика игры ---
+    function renderWinningsTable() {
+        const list = document.getElementById("winnings-list");
+        list.innerHTML = "";
+
+        // Рендерим уровни от самого высокого к самому низкому
+        // Ограничиваем количество уровней до длины массива выигрышей или количества вопросов в игре
+        const levelsToShow = Math.min(winnings.length, questions.length);
+
+        for (let i = levelsToShow - 1; i >= 0; i--) {
+            const li = document.createElement("li");
+            li.textContent = formatNumber(winnings[i]) + " руб.";
+            li.setAttribute("data-level", i);
+
+            if (i === currentQuestionIndex) {
+                li.classList.add("current");
+            }
+            if (i < currentQuestionIndex) {
+                li.classList.add("correct");
+            }
+            if (secureWinnings.includes(winnings[i])) {
+                li.classList.add("secure");
+            }
+
+            list.appendChild(li);
+        }
+    }
+
+    function loadQuestion() {
+        if (currentQuestionIndex >= questions.length) {
+            endGame();
+            return;
+        }
+
+        const q = questions[currentQuestionIndex];
+        document.getElementById("question-text").textContent = q.question;
+        document.querySelectorAll('.answer-btn').forEach((btn, index) => {
+            const option = ['A', 'B', 'C', 'D'][index];
+            btn.textContent = `${option}) ${q.answers[option]}`;
+            btn.className = "answer-btn";
+            btn.disabled = false;
+        });
+        document.getElementById("question-number").textContent = currentQuestionIndex + 1;
+        document.getElementById("status").textContent = "";
+        document.getElementById("next-btn").style.display = "none";
+
+        // Обновляем отображение текущего выигрыша
+        if (currentQuestionIndex > 0) {
+            document.getElementById("current-winnings").textContent = formatNumber(winnings[currentQuestionIndex - 1]) + " руб.";
+        } else {
+            document.getElementById("current-winnings").textContent = "0 руб.";
+        }
+
+        renderWinningsTable();
+    }
+
+    function selectAnswer(button) {
+        if (!gameActive) return;
+
+        const selectedOption = button.getAttribute("data-option");
+        const correctOption = questions[currentQuestionIndex].correct;
+        const isCorrect = selectedOption === correctOption;
+
+        document.querySelectorAll('.answer-btn').forEach(btn => {
+            if (btn.getAttribute("data-option") === correctOption) {
+                btn.classList.add("correct");
+            } else if (btn === button && !isCorrect) {
+                btn.classList.add("incorrect");
+            }
+            btn.disabled = true;
+        });
+
+        if (isCorrect) {
+            score++;
+            document.getElementById("status").textContent = "Правильно!";
+            document.getElementById("current-winnings").textContent = formatNumber(winnings[currentQuestionIndex]) + " руб.";
+        } else {
+            let finalWinnings = 0;
+            if (currentQuestionIndex > 0) {
+                if (currentQuestionIndex > 9) { // После 10-го (индекс 9)
+                    finalWinnings = winnings[9]; // 32000
+                } else if (currentQuestionIndex > 4) { // После 5-го (индекс 4)
+                    finalWinnings = winnings[4]; // 1000
+                }
+            }
+            document.getElementById("current-winnings").textContent = formatNumber(finalWinnings) + " руб.";
+            document.getElementById("status").textContent = `Неправильно. Правильный ответ: ${correctOption}) ${questions[currentQuestionIndex].answers[correctOption]}. Ваш выигрыш: ${formatNumber(finalWinnings)} руб.`;
+            gameActive = false;
+        }
+
+        document.getElementById("next-btn").style.display = "inline-block";
+    }
+
+    function nextQuestion() {
+        currentQuestionIndex++;
+        if (currentQuestionIndex < questions.length && gameActive) {
+            loadQuestion();
+        } else {
+            endGame();
+        }
+    }
+
+    function endGame() {
+        const finalWinnings = currentQuestionIndex > 0 ? winnings[currentQuestionIndex - 1] : 0;
+        document.getElementById("question-text").textContent = `Игра окончена! Вы набрали ${score} из ${questions.length} баллов. Ваш выигрыш: ${formatNumber(finalWinnings)} руб.`;
+        document.querySelectorAll('.answer-btn').forEach(btn => btn.style.display = "none");
+        document.querySelectorAll('.lifeline-btn').forEach(btn => btn.style.display = "none");
+        document.getElementById("next-btn").style.display = "none";
+        renderWinningsTable();
+    }
+
+    // --- Подсказки ---
+    function useFiftyFifty() {
+        if (!lifelines.fiftyFifty || !gameActive) return;
+        lifelines.fiftyFifty = false;
+        document.getElementById("fifty-fifty").classList.add("used");
+
+        const correct = questions[currentQuestionIndex].correct;
+        const options = ['A', 'B', 'C', 'D'];
+        let wrongOptions = options.filter(opt => opt !== correct);
+        const toRemove = wrongOptions.sort(() => 0.5 - Math.random()).slice(0, 2);
+
+        document.querySelectorAll('.answer-btn').forEach(btn => {
+            const opt = btn.getAttribute("data-option");
+            if (toRemove.includes(opt)) {
+                btn.disabled = true;
+                btn.textContent = "--------";
+            }
+        });
+    }
+
+    function useCallFriend() {
+        if (!lifelines.callFriend || !gameActive) return;
+        lifelines.callFriend = false;
+        document.getElementById("call-friend").classList.add("used");
+        const correctAnswer = questions[currentQuestionIndex].answers[questions[currentQuestionIndex].correct];
+        document.getElementById("status").textContent = `"Мой друг думает, что правильный ответ - ${correctAnswer}"`;
+    }
+
+    function useAskAudience() {
+        if (!lifelines.askAudience || !gameActive) return;
+        lifelines.askAudience = false;
+        document.getElementById("ask-audience").classList.add("used");
+        const correctOption = questions[currentQuestionIndex].correct;
+        document.getElementById("status").textContent = `Зрители считают, что правильный ответ - ${correctOption}. (85%)`;
+    }
+
+    // --- Запуск игры ---
+    // Инициализируем игру после загрузки всех скриптов
+    window.onload = function() {
+        initGame();
+    };
+
+</script>
+
+</body>
+</html>
